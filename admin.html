@@ -5,23 +5,38 @@
     <title>Admin - Controle Total</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #e5e7eb; }
-        .admin-card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .admin-card, .login-card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         h2 { color: #1f2937; text-align: center; }
         h3 { color: #374151; margin-top: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
         label { display: block; margin-top: 10px; font-weight: bold; color: #4b5563; font-size: 14px; }
-        input[type="text"], textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+        input[type="text"], input[type="password"], textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
         button { background: #2563eb; color: white; border: none; padding: 10px 15px; margin-top: 8px; border-radius: 6px; cursor: pointer; font-weight: bold; }
         .full-width-button { width: 100%; padding: 15px; font-size: 16px; margin-top: 25px; background: #059669; }
         .status { font-size: 0.8em; color: #059669; margin-top: 5px; font-weight: bold; }
+        #admin-content { display: none; } /* Escondido por padrão */
+        .logout-btn { background: #dc2626; float: right; font-size: 12px; }
     </style>
 </head>
 <body>
-    <div class="admin-card">
+
+    <!-- TELA DE LOGIN -->
+    <div id="login-screen" class="login-card">
+        <h2>Login Administrativo</h2>
+        <label>E-mail:</label>
+        <input type="text" id="login-email">
+        <label>Senha:</label>
+        <input type="password" id="login-password">
+        <button onclick="login()" style="width: 100%; margin-top: 20px;">Entrar</button>
+    </div>
+
+    <!-- PAINEL DE CONTROLE (SÓ APARECE APÓS LOGIN) -->
+    <div id="admin-content" class="admin-card">
+        <button class="logout-btn" onclick="logout()">Sair</button>
         <h2>Painel de Controle</h2>
         
         <h3>1. Lado Esquerdo (Vídeo/Principal)</h3>
         <label>YouTube (Link do vídeo ou live):</label>
-        <input type="text" id="in-youtube-url" placeholder="https://www.youtube.com/watch?v=...">
+        <input type="text" id="in-youtube-url" placeholder="...">
         <button onclick="setYouTubeContent()">Selecionar YouTube</button>
         <p id="youtube-status" class="status"></p>
 
@@ -31,17 +46,16 @@
         <p id="video-status" class="status"></p>
 
         <h3>2. Lado Direito (Agenda Semanal)</h3>
-        <label>Links das Fotos do Drive (Cole todos separados por vírgula):</label>
-        <textarea id="in-agenda" rows="4" placeholder="Link1, Link2, Link3..."></textarea>
-        <p style="font-size: 11px; color: #666;">Dica: Pegue o link de compartilhar no Drive e cole aqui.</p>
+        <label>Links das Fotos do Drive (Separados por vírgula):</label>
+        <textarea id="in-agenda" rows="4"></textarea>
 
         <hr>
         <h3>3. Textos</h3>
         <label>Notícia do Rodapé:</label>
-        <input type="text" id="in-noticia" placeholder="Digite a notícia...">
+        <input type="text" id="in-noticia">
 
-        <label>Temperatura Manual (Opcional):</label>
-        <input type="text" id="in-clima" placeholder="Ex: 30°C Ensolarado">
+        <label>Temperatura Manual:</label>
+        <input type="text" id="in-clima">
 
         <button onclick="atualizar()" class="full-width-button">🚀 ENVIAR PARA O PAINEL</button>
     </div>
@@ -49,6 +63,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js";
     import { getDatabase, ref, update } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyALeKvd6zzl7VE67ygb7YPw5WjCO6sRP14",
@@ -59,6 +74,33 @@
     
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    // --- LÓGICA DE AUTENTICAÇÃO ---
+
+    window.login = () => {
+        const email = document.getElementById('login-email').value;
+        const pass = document.getElementById('login-password').value;
+        signInWithEmailAndPassword(auth, email, pass)
+            .catch(error => alert("Erro ao logar: " + error.message));
+    };
+
+    window.logout = () => {
+        signOut(auth);
+    };
+
+    // Monitora se o usuário está logado ou não
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('admin-content').style.display = 'block';
+        } else {
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('admin-content').style.display = 'none';
+        }
+    });
+
+    // --- SUA LÓGICA ORIGINAL ---
 
     let currentContentType = 'file_video'; 
     let currentContentUrl = '';
@@ -93,7 +135,7 @@
 
         update(ref(db, 'layout_painel'), payload)
           .then(() => alert('Painel atualizado com sucesso!'))
-          .catch((err) => alert('Erro: ' + err.message));
+          .catch((err) => alert('Erro de permissão: Você precisa estar logado!'));
     };
 </script>
 </body>
