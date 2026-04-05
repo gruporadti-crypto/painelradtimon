@@ -7,16 +7,12 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- LADO ESQUERDO: VÍDEO -->
         <div id="main-content-display"></div>
-
-        <!-- LADO DIREITO: AGENDA -->
         <div id="agenda-slideshow"></div>
 
-        <!-- WIDGET DE HORA E CLIMA -->
         <div id="widget-info">
             <div id="clock">00:00</div>
-            <div id="date">Carregando data...</div>
+            <div id="date">...</div>
             <hr style="margin: 10px 0; border: 0; border-top: 1px solid rgba(255,255,255,0.2);">
             <div id="weather-row">
                 <span id="txt-clima">--°C</span>
@@ -24,10 +20,9 @@
             </div>
         </div>
 
-        <!-- RODAPÉ -->
         <div id="widget-footer">
             <div class="ticker-wrap">
-                <div class="ticker" id="txt-noticia">Iniciando sistema informativo...</div>
+                <div class="ticker" id="txt-noticia">Iniciando sistema informativo RAD Imagem...</div>
             </div>
         </div>
     </div>
@@ -46,79 +41,89 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // --- LÓGICA DO RELÓGIO ---
+        // --- RELÓGIO ---
         function updateClock() {
             const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            document.getElementById('clock').innerText = `${hours}:${minutes}`;
-
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clock').innerText = h + ":" + m;
             const options = { weekday: 'long', day: 'numeric', month: 'long' };
             document.getElementById('date').innerText = now.toLocaleDateString('pt-BR', options);
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // --- LÓGICA DO CLIMA AUTOMÁTICO ---
-        const weatherKey = "86ecce68dfacb31e2e21fe5c621a2317";
+        // --- CLIMA ---
         async function getClima() {
             try {
-                const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=-5.0939&lon=-42.8416&appid=${weatherKey}&units=metric&lang=pt_br`);
+                const res = await fetch("https://api.openweathermap.org/data/2.5/weather?lat=-5.0939&lon=-42.8416&appid=86ecce68dfacb31e2e21fe5c621a2317&units=metric&lang=pt_br");
                 const data = await res.json();
                 if (data.main) {
                     document.getElementById('txt-clima').innerText = Math.round(data.main.temp) + "°C";
                     document.getElementById('txt-desc').innerText = data.weather[0].description;
                 }
-            } catch (e) { console.error("Erro clima", e); }
+            } catch (e) { console.error("Erro clima:", e); }
         }
-        setInterval(getClima, 900000); // 15 min
-        getClima();
+        setInterval(getClima, 900000); getClima();
 
-        // --- LÓGICA DA AGENDA (GOOGLE DRIVE) ---
+        // --- AGENDA (GOOGLE DRIVE / LOCAL) ---
         let fotosAgenda = [];
         let indice = 0;
-        function formatDriveUrl(url) {
-            const id = url.match(/\/d\/(.+?)\//);
-            return id ? `https://lh3.googleusercontent.com/d/${id[1]}` : url.trim();
+
+        function formatImgUrl(url) {
+            if (!url) return '';
+            url = url.trim();
+            // Se for Google Drive, converte para miniatura HD (sz=w1200)
+            const driveMatch = url.match(/(?:id=|\/d\/|d\/)([\w-]{25,})/);
+            if (driveMatch && driveMatch[1]) {
+                return "https://drive.google.com/thumbnail?id=" + driveMatch[1] + "&sz=w1200";
+            }
+            // Se não for link (ex: "foto1.jpg"), ele busca na pasta local
+            return url;
         }
+
         function rodarAgenda() {
             const container = document.getElementById('agenda-slideshow');
             if (fotosAgenda.length > 0) {
-                container.innerHTML = `<img src="${formatDriveUrl(fotosAgenda[indice])}" class="fade-in">`;
+                if (indice >= fotosAgenda.length) indice = 0;
+                const urlFinal = formatImgUrl(fotosAgenda[indice]);
+                
+                const img = new Image();
+                img.src = urlFinal;
+                img.className = 'fade-in';
+                img.onload = () => {
+                    container.innerHTML = '';
+                    container.appendChild(img);
+                };
                 indice = (indice + 1) % fotosAgenda.length;
             }
         }
         setInterval(rodarAgenda, 10000);
 
-        // --- ESCUTAR FIREBASE ---
+        // --- FIREBASE ---
         onValue(ref(db, 'layout_painel'), (snapshot) => {
             const data = snapshot.val();
             if (!data) return;
 
             document.getElementById('txt-noticia').innerText = data.noticia || "";
-            
-            // Se houver clima manual no admin, ele substitui o automático
-            if (data.clima && data.clima.trim() !== "") {
-                document.getElementById('txt-clima').innerText = data.clima;
-                document.getElementById('txt-desc').innerText = "Manual";
-            }
+            if (data.clima) document.getElementById('txt-clima').innerText = data.clima;
 
+            // Atualiza Lista da Agenda
             if (data.agendaUrls) {
-                fotosAgenda = data.agendaUrls.split(',');
-                rodarAgenda();
+                fotosAgenda = data.agendaUrls.split(',').map(u => u.trim()).filter(u => u.length > 2);
+                if (indice === 0) rodarAgenda();
             }
 
             const display = document.getElementById('main-content-display');
             const type = data.mainContentType;
             const url = data.mainContentUrl;
-            display.innerHTML = ""; 
-
+            
+            display.innerHTML = "";
             if (type === 'file_video') {
-                display.innerHTML = `<video src="${url}" autoplay muted loop playsinline></video>`;
+                display.innerHTML = `<video src="${url}" autoplay loop playsinline></video>`;
             } else if (type === 'youtube_video') {
-                display.innerHTML = `<iframe src="https://www.youtube.com/embed/${url}?autoplay=1&mute=1&loop=1&playlist=${url}&controls=0"></iframe>`;
-            } else {
-                display.innerHTML = `<img src="${url}" style="object-fit: cover;">`;
+                // MUTE=0 para habilitar o som (Exige clique na tela ao carregar)
+                display.innerHTML = `<iframe src="https://www.youtube.com/embed/${url}?autoplay=1&mute=0&playlist=${url}&loop=1&controls=0" allow="autoplay; fullscreen"></iframe>`;
             }
         });
     </script>
