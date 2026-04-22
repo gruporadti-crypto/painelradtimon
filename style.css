@@ -41,7 +41,7 @@ video, iframe { width: 100%; height: 100%; border: none; object-fit: cover; }
 /* WIDGET DE HORA E CLIMA (Sobreposto ao vídeo) */
 #widget-info {
     position: absolute; top: 25px; left: 25px;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.3);
     padding: 20px; border-radius: 20px;
     text-align: center; z-index: 100;
     border: 1px solid rgba(255,255,255,0.1);
